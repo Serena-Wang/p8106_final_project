@@ -1,0 +1,21 @@
+set.seed(2)
+
+glm, ridge, lasso, elastic-net,pls, gam, mars --> mars
+lasso, elastic-net, gam, mars --> gam
+no need to do box-cox
+primary: linear, elastic-net, mars + gam + forest for regression
+
+
+secondary: logistic reg, classification forest (with boosting), svm 
+
+use caret everywhere!!!
+set.seed(2)!!!!!
+each of these in a separate file:
+- eda only on training set
+- primary 
+
+hopefully after friday
+- secondary - forecast
+- secondary - logistic and svm
+- secondary comparison - kappa and accuracy + test set accuracy
+
