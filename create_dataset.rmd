@@ -1,0 +1,58 @@
+---
+title: "create_dataset"
+author: "Yijin Wang"
+date: "2023-05-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(janitor)
+```
+
+```{r}
+set.seed(4005)
+serena_idx = sample(1:10000, 2000)
+
+set.seed(2749)
+td_idx = sample(1:10000, 2000)
+
+set.seed(2506)
+baoyi_idx = sample(1:10000, 2000)
+
+```
+
+
+```{r}
+length(unique(c(serena_idx, td_idx)))
+
+length(unique(c(serena_idx, baoyi_idx)))
+
+length(unique(c(td_idx, baoyi_idx)))
+```
+
+```{r}
+load("recovery.RData")
+```
+
+```{r}
+final_idx <- unique(c(serena_idx, td_idx))
+
+dat <- dat[final_idx,] %>%
+  as.data.frame(stringsAsFactors=FALSE) %>%
+  clean_names() %>%
+  drop_na()  %>%
+  mutate(gender = as.factor(gender),
+         race = as.factor(race),
+         smoking = as.factor(smoking),
+         hypertension = as.factor(hypertension),
+         diabetes = as.factor(diabetes),
+         vaccine = as.factor(vaccine),
+         severity = as.factor(severity),
+         study = as.factor(study))
+```
+
