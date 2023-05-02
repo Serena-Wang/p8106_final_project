@@ -42,7 +42,7 @@ load("recovery.RData")
 ```{r}
 final_idx <- unique(c(serena_idx, td_idx))
 
-dat <- dat[final_idx,] %>%
+final_data <- dat[final_idx,] %>%
   as.data.frame(stringsAsFactors=FALSE) %>%
   clean_names() %>%
   drop_na()  %>%
@@ -54,5 +54,9 @@ dat <- dat[final_idx,] %>%
          vaccine = as.factor(vaccine),
          severity = as.factor(severity),
          study = as.factor(study))
+```
+
+```{r}
+save(final_data, file = "final_data.RData")
 ```
 
