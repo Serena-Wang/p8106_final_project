@@ -41,7 +41,7 @@ training_set <- final_data[training_rows,]
 
 ## Setting methods
 ```{r message=FALSE, warning=FALSE}
-ctrl2 = trainControl(method = "repeatedcv", repeats = 5, 
+ctrl2 = trainControl(method = "cv", number = 10, 
                      summaryFunction = twoClassSummary,
                      classProbs = TRUE)
 ```
