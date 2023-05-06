@@ -33,6 +33,7 @@ test_y <- final_data$binary_recovery_time[-training_rows]
 
 test_x_df = as.data.frame(test_x)
 test_y_df = as.data.frame(test_y)
+train_x_df = as.data.frame(train_x)
 ```
 
 ```{r message=FALSE, warning=FALSE}
@@ -41,16 +42,14 @@ training_set <- final_data[training_rows,]
 
 ## Setting methods
 ```{r message=FALSE, warning=FALSE}
-ctrl2 = trainControl(method = "cv", number = 10, 
-                     summaryFunction = twoClassSummary,
-                     classProbs = TRUE)
+ctrl2 = trainControl(method = "cv", number = 10)
 ```
 
 ## (a) Perform a logistic regression using the training data.
 ```{r message=FALSE, warning=FALSE}
 set.seed(2)
 #fit a logistic regression using caret
-model.glm = train(train_x, train_y, method = "glm", metric = "ROC",
+model.glm = train(train_x, train_y, method = "glm", metric = "Accuracy",
                   trControl = ctrl2)
 summary(model.glm)
 
@@ -68,6 +67,13 @@ confusionMatrix = confusionMatrix(data = as.factor(test.pred),
                 reference = test_y,
                 positive = "high")
 confusionMatrix
+
+#Training error rate
+train.pred.prob = predict(model.glm$finalModel, newdata = train_x_df, type = "response")
+train.pred.prob[train.pred.prob > 0.5] = "high"
+train.pred.prob[train.pred.prob < 0.5] = "low"
+table(train_y, train.pred.prob)
+mean(train.pred.prob != train_y)
 ```
 
 
