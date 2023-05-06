@@ -1,0 +1,332 @@
+---
+title: "analysis_I"
+author: "Yijin Wang"
+date: "2023-05-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,message = FALSE}
+library(janitor)
+library(tidyverse)
+library(AppliedPredictiveModeling)
+library(lattice)
+library(caret)
+library(corrplot)
+library(GGally)
+library(miscset)
+library(ggpubr)
+library(knitr)
+library(rpart)
+library(rpart.plot)
+library(ranger)
+```
+
+## 1. Load Data
+```{r}
+load("final_data.RData")
+```
+
+## 2. Train/test split
+```{r}
+set.seed(2)
+training_rows <- createDataPartition(final_data$recovery_time,
+                                     p = 0.8,
+                                     list = F)
+```
+
+```{r}
+train_x <- model.matrix(recovery_time~., final_data %>% select(-id, -binary_recovery_time))[training_rows,-1]
+train_y <- final_data$recovery_time[training_rows]
+test_x <- model.matrix(recovery_time~., final_data %>% select(-id, -binary_recovery_time))[-training_rows,-1]
+test_y <- final_data$recovery_time[-training_rows]
+```
+
+
+```{r}
+training_set <- final_data[training_rows,]
+```
+
+
+## 3.EDA
+
+### basic summary statistics
+```{r}
+summary(training_set)
+```
+
+
+quantative variables
+
+```{r}
+theme <- transparentTheme(trans = 0.4)
+theme$plot.symbol$col = rgb(.2, .2, .2, .4)
+theme$plot.symbol$pch = 16
+theme$plot.line$col = rgb(1, 0, 0, .7)
+theme$plot.line$lwd <- 2
+trellis.par.set(theme)
+featurePlot(x = training_set %>% dplyr::select(-recovery_time, -id, -gender, -race,-smoking,-hypertension, -diabetes, -vaccine, -severity, -study, -binary_recovery_time),
+            y = training_set$recovery_time,
+            plot = "scatter",
+            type = c("p","smooth"),
+            span = .5,
+            auto.key = list(columns = 2),
+            labels = c("", "Recovery Time"))
+```
+```{r}
+ggplotGrid(ncol = 2,
+  lapply(c("bmi", "sbp", "ldl","age", "height", "weight"),
+    function(col) {
+        ggplot(training_set, aes_string(col)) + geom_density(aes(y = ..density..))
+    }))
+```
+### categorical variables
+```{r}
+ggplotGrid(ncol = 2,
+  lapply(c("gender", "race", "smoking","hypertension", "diabetes", "vaccine", "severity", "study"),
+    function(col) {
+        ggplot(training_set, aes_string(col)) + geom_boxplot(aes(y = recovery_time)) + coord_flip()
+    }))
+```
+
+### Correlation plot for quantative variables
+```{r}
+corrplot(cor(training_set %>% dplyr::select(-recovery_time, -id, -gender, -race,-smoking,-hypertension, -diabetes, -vaccine, -severity, -study, -binary_recovery_time)))
+```
+## 4. set up contrl 
+
+Create control for 10-fold cross validation
+```{r}
+set.seed(2)
+ctrl1 <- trainControl(method = "cv", number = 10)
+```
+
+## 5. Model training
+
+### a. Linear
+```{r}
+set.seed(2)
+linear_fit <- train(train_x, train_y,method = "lm")
+
+```
+
+```{r}
+coef(linear_fit$finalModel)%>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rename(value = V1) %>%
+  kable(caption = "Linear Regression Parameter Coefficients")
+```
+
+
+Test set performance
+```{r}
+linear_fit_prediction <- predict(linear_fit, newdata = test_x)
+linear_ts_mse <- mean((linear_fit_prediction - test_y)^2)
+linear_ts_mse
+```
+
+### b. Elastic Net
+```{r}
+set.seed(2)
+enet_fit <- train(train_x, train_y,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 20),
+                                         lambda = seq(0,4,length = 50)),
+                  
+                  trControl = ctrl1)
+
+```
+
+```{r}
+enet_fit$bestTune
+```
+
+```{r}
+myCol <- rainbow(25)
+myPar <- list(superpose.symbol = list(col = myCol),
+              superpose.line = list(col = myCol))
+plot(enet_fit, par.settings = myPar)
+```
+
+\newpage
+
+```{r}
+coef(enet_fit$finalModel, enet_fit$bestTune$lambda) %>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rename(value = s1) %>%
+  kable(caption = "Elastic-Net Parameter Coefficients")
+```
+Test set performance
+```{r}
+enet_fit_prediction <- predict(enet_fit, newdata = test_x)
+enet_ts_mse <- mean((enet_fit_prediction - test_y)^2)
+enet_ts_mse
+```
+
+### c. GAM
+```{r,message=FALSE}
+set.seed(2)
+gam_fit <- train(train_x,
+                 train_y,
+                 method = "gam",
+                 trControl = ctrl1)
+```
+
+
+```{r}
+gam_fit$bestTune
+```
+
+```{r}
+gam_fit$finalModel
+```
+age and sbp are not in the model
+
+\newpage
+
+
+```{r}
+s <-summary(gam_fit$finalMode)
+s$p.coeff%>%
+  as.matrix() %>%
+  as.data.frame()%>%
+  rename(value = V1) %>%
+  kable(caption = "GAM Parameter Coefficients")
+```
+```{r}
+s$chi.sq%>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rename(value = V1) %>%
+  kable(caption = "GAM EDF")
+```
+
+
+```{r}
+plot(gam_fit$finalModel)
+```
+
+Test set performance
+```{r}
+gam_fit_prediction <- predict(gam_fit, newdata = test_x)
+gam_ts_mse <- mean((gam_fit_prediction - test_y)^2)
+gam_ts_mse
+```
+
+### d. MARS
+```{r}
+mars_grid <- expand.grid(
+# could be product of 4 hinge functions
+degree = 1:4,
+# upper bound of terms in the model. We have 16 predictors. upper bound could go higher 
+nprune = 2:18)
+```
+
+```{r}
+set.seed(2)
+mars_fit <- train(train_x,
+                  train_y,
+                  method = "earth",
+                  tuneGrid = mars_grid,
+                  trControl = ctrl1)
+```
+
+```{r}
+plot(mars_fit)
+```
+
+```{r}
+mars_fit$bestTune
+```
+```{r}
+coef(mars_fit$finalModel) %>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rename(value = V1) %>%
+  kable(caption = "MARS Parameter Coefficients")
+```
+
+Test set performance
+```{r}
+mars_fit_prediction <- predict(mars_fit, newdata = test_x)
+mars_ts_mse <- mean((mars_fit_prediction - test_y)^2)
+mars_ts_mse
+```
+
+### e. Random Forest with boosting
+```{r}
+set.seed(2)
+gbm_grid <- expand.grid(
+  # upper bound for number of trees
+  n.trees = c(200, 500, 1000, 2000, 3000),
+  # similar to number of splits in the tree
+  # number of layers in the tree
+  interaction.depth = 1:5,
+  shrinkage = c(0.005,0.01,0.015),
+  # min obs allowed in a node
+  n.minobsinnode=c(1,5))
+
+library(doParallel)
+Mycluster = makeCluster(detectCores()-2)
+registerDoParallel(Mycluster)
+
+boost_fit <- train(train_x,
+                   train_y,
+                   method = "gbm",
+                   tuneGrid = gbm_grid,
+                   trControl = ctrl1,
+                   verbose = FALSE)
+stopCluster(Mycluster)
+registerDoSEQ()
+```
+
+
+```{r}
+ggplot(boost_fit, highlight = TRUE)
+```
+
+```{r}
+boost_fit$bestTune
+```
+
+variable importance 
+```{r}
+summary(boost_fit$finalModel,las = 2, cBars = 17, cex.names = 0.6)
+```
+
+test error
+```{r}
+boost_prediction <- predict(boost_fit$finalModel, newdata = test_x)
+boost_ts_mse <- mean((boost_prediction - test_y)^2)
+boost_ts_mse
+```
+
+## 6. Comparison
+
+### Resample 
+```{r}
+set.seed(2)
+resamp <- resamples(list(
+                         Enet = enet_fit,
+                         GAM = gam_fit,
+                         MARS = mars_fit,
+                         Random_Forest = boost_fit))
+summary(resamp)
+```
+
+```{r}
+bwplot(resamp, metric = "RMSE")
+```
+
+### Test set performance 
+```{r}
+tibble(model = c("Linear", "Enet", "GAM", "MARS", "Random Forest"),
+       mse = c(linear_ts_mse, enet_ts_mse, gam_ts_mse, mars_ts_mse, boost_ts_mse)) %>%
+  arrange(mse) %>%
+  kable(caption = "Test set performance")
+```
