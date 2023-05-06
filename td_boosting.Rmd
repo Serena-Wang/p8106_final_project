@@ -1,0 +1,144 @@
+---
+title: "td_boosting"
+author: "Tvisha R. Devavarapu"
+date: "2023-05-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages set up, message = FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(party)
+library(partykit)
+library(pROC)
+
+library(randomForest)
+library(ranger)
+library(gbm)
+library(pdp)
+
+set.seed(17)
+```
+
+## 1. Load Data
+```{r}
+load("final_data.RData")
+```
+
+## 2. Train/test split
+```{r}
+
+final_data <- final_data %>% 
+  mutate(binary_recovery_time = as.factor(binary_recovery_time))
+
+levels(final_data$binary_recovery_time) = c("low", "high")
+
+set.seed(2)
+training_rows <- createDataPartition(final_data$binary_recovery_time,
+                                     p = 0.8,
+                                     list = F)
+```
+
+```{r}
+train_x <- model.matrix(binary_recovery_time~., final_data %>% select(-id, -recovery_time))[training_rows,-1]
+train_y <- final_data$binary_recovery_time[training_rows]
+test_x <- model.matrix(binary_recovery_time~., final_data %>% select(-id, -recovery_time))[-training_rows,-1]
+test_y <- final_data$binary_recovery_time[-training_rows]
+```
+
+```{r}
+training_set <- final_data[training_rows,]
+```
+
+### Classification: Random Forest with boosting
+```{r warning=FALSE}
+ctrl.c <- trainControl(method = "cv", number = 10)
+
+set.seed(2)
+gbm_grid <- expand.grid(
+  # upper bound for number of trees
+  n.trees = c(50, 100, 200, 500, 1000, 2000),
+  # similar to number of splits in the tree
+  # number of layers in the tree
+  interaction.depth = 1:5,
+  shrinkage = c(0.005,0.01,0.015),
+  # min obs allowed in a node
+  n.minobsinnode = c(1,5))
+
+library(doParallel)
+Mycluster = makeCluster(detectCores() - 2)
+registerDoParallel(Mycluster)
+
+boost_fit <- train(train_x,
+                   train_y,
+                   method = "gbm",
+                   tuneGrid = gbm_grid,
+                   trControl = ctrl.c,
+                   distribution = "adaboost",
+                   #metric = "ROC",
+                   verbose = FALSE)
+
+stopCluster(Mycluster)
+registerDoSEQ()
+```
+
+```{r}
+ggplot(boost_fit, highlight = TRUE)
+```
+
+```{r}
+boost_fit$bestTune
+```
+
+variable importance 
+```{r}
+summary(boost_fit$finalModel,las = 2, cBars = 17, cex.names = 0.6)
+```
+```{r training error}
+trboost_prediction <- predict(boost_fit$finalModel, newdata = train_x, type = "response")
+
+trboost_prediction[trboost_prediction > 0.50] = "low"
+trboost_prediction[trboost_prediction < 0.50] = "high"
+
+boost_tr_mse <- mean(trboost_prediction != train_y)
+boost_tr_mse
+```
+
+
+```{r testing error}
+boost_prediction <- predict(boost_fit$finalModel, newdata = test_x, type = "response")
+
+boost_prediction[boost_prediction > 0.50] = "low"
+boost_prediction[boost_prediction < 0.50] = "high"
+
+boost_ts_mse <- mean(boost_prediction != test_y)
+boost_ts_mse
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
