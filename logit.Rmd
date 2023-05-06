@@ -1,0 +1,80 @@
+---
+title: "classification"
+author: "bf2506"
+date: "2023-05-06"
+output: pdf_document
+---
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(caret)
+```
+
+## 1. Load Data
+```{r}
+load("final_data.RData")
+final_data = final_data %>% 
+  mutate(binary_recovery_time = as.factor(binary_recovery_time))
+levels(final_data$binary_recovery_time) = c("low", "high")
+```
+
+## 2. Train/test split
+```{r message=FALSE, warning=FALSE}
+set.seed(2)
+training_rows <- createDataPartition(final_data$binary_recovery_time,
+                                     p = 0.8,
+                                     list = F)
+```
+
+```{r message=FALSE, warning=FALSE}
+train_x <- model.matrix(binary_recovery_time~., final_data %>% dplyr::select(-id, -recovery_time))[training_rows,-1]
+train_y <- final_data$binary_recovery_time[training_rows]
+test_x <- model.matrix(binary_recovery_time~., final_data %>% dplyr::select(-id, -recovery_time))[-training_rows,-1]
+test_y <- final_data$binary_recovery_time[-training_rows]
+
+test_x_df = as.data.frame(test_x)
+test_y_df = as.data.frame(test_y)
+train_x_df = as.data.frame(train_x)
+```
+
+```{r message=FALSE, warning=FALSE}
+training_set <- final_data[training_rows,]
+```
+
+## Setting methods
+```{r message=FALSE, warning=FALSE}
+ctrl2 = trainControl(method = "cv", number = 10)
+```
+
+## (a) Perform a logistic regression using the training data.
+```{r message=FALSE, warning=FALSE}
+set.seed(2)
+#fit a logistic regression using caret
+model.glm = train(train_x, train_y, method = "glm", metric = "Accuracy",
+                  trControl = ctrl2)
+summary(model.glm)
+
+model.glm$finalModel #My generalized linear model (GLM)
+
+contrasts(final_data$binary_recovery_time)
+
+#We first consider the simple classifier with a cut-off of 0.5 and evaluate its performance on the test data
+
+test.pred.prob = predict(model.glm$finalModel, newdata = test_x_df, type = "response")
+test.pred = rep("low", length(test.pred.prob))
+test.pred[test.pred.prob > 0.5] = "high"
+
+confusionMatrix = confusionMatrix(data = as.factor(test.pred), 
+                reference = test_y,
+                positive = "high")
+confusionMatrix
+
+#Training error rate
+train.pred.prob = predict(model.glm$finalModel, newdata = train_x_df, type = "response")
+train.pred.prob[train.pred.prob > 0.5] = "high"
+train.pred.prob[train.pred.prob < 0.5] = "low"
+table(train_y, train.pred.prob)
+mean(train.pred.prob != train_y)
+```
+
+
+
