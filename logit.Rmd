@@ -68,7 +68,10 @@ confusionMatrix = confusionMatrix(data = as.factor(test.pred),
                 positive = "high")
 confusionMatrix
 
-#Training error rate
+#Testing error rate is 0.2926491
+1 - confusionMatrix$overall["Accuracy"]
+
+#Training error rate is 0.2939751
 train.pred.prob = predict(model.glm$finalModel, newdata = train_x_df, type = "response")
 train.pred.prob[train.pred.prob > 0.5] = "high"
 train.pred.prob[train.pred.prob < 0.5] = "low"
