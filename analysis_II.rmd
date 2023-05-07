@@ -1,0 +1,317 @@
+---
+title: "analysis_II"
+output: pdf_document
+date: "2023-05-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,message = FALSE}
+library(janitor)
+library(tidyverse)
+library(AppliedPredictiveModeling)
+library(lattice)
+library(caret)
+library(corrplot)
+library(GGally)
+library(miscset)
+library(ggpubr)
+library(knitr)
+library(rpart)
+library(rpart.plot)
+library(ranger)
+library(kernlab)
+
+library(rpart)
+library(rpart.plot)
+library(party)
+library(partykit)
+library(pROC)
+
+library(randomForest)
+library(ranger)
+library(gbm)
+library(pdp)
+
+library(doParallel)
+library(gtsummary)
+```
+
+
+## 1. Load Data
+```{r}
+load("final_data.RData")
+```
+
+## 2. Train/test split
+```{r}
+set.seed(2)
+final_data <- final_data %>%
+  mutate(binary_recovery_time = factor(binary_recovery_time))
+levels(final_data$binary_recovery_time) = c("low", "high")
+training_rows <- createDataPartition(final_data$binary_recovery_time,
+                                     p = 0.8,
+                                     list = F)
+```
+
+```{r}
+train_x <- model.matrix(binary_recovery_time~., final_data %>% select(-id, -recovery_time))[training_rows,-1]
+train_y <- final_data$binary_recovery_time[training_rows]
+test_x <- model.matrix(binary_recovery_time~., final_data %>% select(-id, -recovery_time))[-training_rows,-1]
+test_y <- final_data$binary_recovery_time[-training_rows]
+```
+
+
+```{r}
+training_set <- final_data[training_rows,]
+```
+
+## 3.EDA
+
+### basic summary statistics
+```{r}
+summary(training_set)
+```
+quantatative variables
+
+```{r}
+theme <- transparentTheme(trans = 0.4)
+theme$plot.symbol$col = rgb(.2, .2, .2, .4)
+theme$plot.symbol$pch = 16
+theme$plot.line$col = rgb(1, 0, 0, .7)
+theme$plot.line$lwd <- 2
+trellis.par.set(theme)
+featurePlot(x = training_set %>% dplyr::select(-recovery_time, -binary_recovery_time, -id, -gender, -race,-smoking,-hypertension, -diabetes, -vaccine, -severity, -study),
+            y = training_set$binary_recovery_time,
+            plot = "box",
+            pch = "|",
+            scales = list(x = list(relation = "free"),
+                          y = list(relation = "free")),
+            auto.key = list(columns = 2),
+            labels = c("Binary Recovery Time", ""))
+```
+
+```{r}
+ggplotGrid(ncol = 2,
+  lapply(c("bmi", "sbp", "ldl","age", "height", "weight"),
+    function(col) {
+        ggplot(training_set, aes_string(col)) + geom_density(aes(y = ..density..))
+    }))
+```
+```{r}
+l <-
+  lapply(c("gender", "race", "smoking","hypertension", "diabetes", "vaccine", "severity", "study"),
+    function(col) {
+        ggplot(training_set, aes_string(col)) + geom_bar(aes(fill = binary_recovery_time),stat="count", position = "dodge")
+    })
+patchwork::wrap_plots(l, ncol = 2, guides = "collect") & theme(legend.position = "bottom")
+```
+
+
+```{r}
+sum(train_y == "low")
+sum(train_y == "high")
+
+```
+
+```{r}
+sum(test_y == "low")
+sum(test_y == "high")
+```
+
+
+```{r}
+sum(final_data$binary_recovery_time == "low")
+sum(final_data$binary_recovery_time == "high")
+```
+
+
+## 4. set up control
+```{r message=FALSE, warning=FALSE}
+ctrl2 = trainControl(method = "cv", number = 10)
+```
+
+## 5. Model training
+
+### a. Logistic regression 
+```{r message=FALSE, warning=FALSE}
+set.seed(2)
+#fit a logistic regression using caret
+model.glm = train(train_x, train_y, method = "glm", metric = "Accuracy",
+                  trControl = ctrl2)
+summary(model.glm)
+```
+
+```{r}
+coef(model.glm$finalModel) %>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rename(value = V1) %>%
+  kable(caption = "Logistic Regression Parameter Coefficients")
+```
+
+```{r}
+contrasts(final_data$binary_recovery_time)
+```
+
+```{r}
+#We first consider the simple classifier with a cut-off of 0.5 and evaluate its performance on the test data
+
+test.pred.prob = predict(model.glm$finalModel, newdata = as.data.frame(test_x), type = "response")
+test.pred = rep("low", length(test.pred.prob))
+test.pred[test.pred.prob > 0.5] = "high"
+
+confusionMatrix = confusionMatrix(data = as.factor(test.pred), 
+                reference = test_y,
+                positive = "high")
+confusionMatrix
+
+#Testing error rate is 0.2926491
+1 - confusionMatrix$overall["Accuracy"]
+```
+
+```{r}
+#Training error rate is 0.2939751
+train.pred.prob = predict(model.glm$finalModel, newdata = as.data.frame(train_x), type = "response")
+train.pred.prob[train.pred.prob > 0.5] = "high"
+train.pred.prob[train.pred.prob < 0.5] = "low"
+table(train_y, train.pred.prob)
+mean(train.pred.prob != train_y)
+```
+
+### b. Random Forest
+```{r}
+set.seed(2)
+gbm_grid <- expand.grid(
+  # upper bound for number of trees
+  n.trees = c(50, 100, 200, 500, 1000, 2000),
+  # similar to number of splits in the tree
+  # number of layers in the tree
+  interaction.depth = 1:5,
+  shrinkage = c(0.005,0.01,0.015),
+  # min obs allowed in a node
+  n.minobsinnode = c(1,5))
+```
+
+```{r}
+Mycluster = makeCluster(detectCores() - 2)
+registerDoParallel(Mycluster)
+
+boost_fit <- train(train_x,
+                   train_y,
+                   method = "gbm",
+                   tuneGrid = gbm_grid,
+                   trControl = ctrl2,
+                   distribution = "adaboost",
+                   verbose = FALSE)
+
+stopCluster(Mycluster)
+registerDoSEQ()
+```
+
+```{r}
+ggplot(boost_fit, highlight = TRUE)
+```
+
+```{r}
+boost_fit$bestTune
+```
+
+
+variable importance 
+```{r}
+summary(boost_fit$finalModel,las = 2, cBars = 17, cex.names = 0.6)
+```
+
+```{r training error}
+trboost_prediction <- predict(boost_fit$finalModel, newdata = train_x, type = "response")
+
+# As predictions are made for the positive class, we set a threshold 0.5 and assign anything above to be "low" (0).
+trboost_prediction[trboost_prediction > 0.50] = "low"
+trboost_prediction[trboost_prediction < 0.50] = "high"
+
+boost_tr_mse <- mean(trboost_prediction != train_y)
+boost_tr_mse
+```
+
+
+```{r testing error}
+boost_prediction <- predict(boost_fit$finalModel, newdata = test_x, type = "response")
+
+# As predictions are made for the positive class, we set a threshold 0.5 and assign anything above to be "low" (0).
+boost_prediction[boost_prediction > 0.50] = "low"
+boost_prediction[boost_prediction < 0.50] = "high"
+
+boost_ts_mse <- mean(boost_prediction != test_y)
+boost_ts_mse
+```
+
+### c. SVM
+```{r}
+svmr_grid <- expand.grid(C = exp(seq(-2,2,len=40)),
+                         sigma = exp(seq(-1,2,len=30)))
+set.seed(2)
+
+Mycluster = makeCluster(detectCores()-2)
+registerDoParallel(Mycluster)
+svmr_fit <- train(binary_recovery_time ~.,
+                  data = training_set %>% select(-id, -recovery_time),
+                  method = "svmRadialSigma",
+                  tuneGrid = svmr_grid,
+                  trControl = ctrl2)
+stopCluster(Mycluster)
+registerDoSEQ()
+
+myCol<- rainbow(25)
+myPar <- list(superpose.symbol = list(col = myCol), 
+              superpose.line = list(col = myCol))
+plot(svmr_fit, highlight = TRUE, par.settings = myPar)
+
+```
+
+
+```{r}
+svmr_fit$bestTune
+```
+
+```{r}
+svm_train_prediction <- predict(svmr_fit$finalModel, newdata = train_x)
+mean(svm_train_prediction!=train_y)
+```
+
+```{r}
+svm_test_prediction <- predict(svmr_fit$finalModel, newdata = test_x)
+```
+
+```{r}
+mean(svm_test_prediction!=test_y)
+```
+
+
+
+## 6. Comparison
+
+### Resample 
+```{r}
+set.seed(2)
+resamp <- resamples(list(
+                         Logistic = model.glm,
+                         Random_Forest = boost_fit,
+                         SVM = svmr_fit))
+summary(resamp)
+```
+
+```{r}
+bwplot(resamp)
+```
+
+
+
+
+
+
+
+
+
