@@ -109,7 +109,7 @@ ctrl1 <- trainControl(method = "cv", number = 10)
 ### a. Linear
 ```{r}
 set.seed(2)
-linear_fit <- train(train_x, train_y,method = "lm")
+linear_fit <- train(train_x, train_y,method = "lm",trControl = ctrl1 )
 
 ```
 
@@ -311,7 +311,7 @@ boost_ts_mse
 ### Resample 
 ```{r}
 set.seed(2)
-resamp <- resamples(list(
+resamp <- resamples(list(Linear = linear_fit,
                          Enet = enet_fit,
                          GAM = gam_fit,
                          MARS = mars_fit,
