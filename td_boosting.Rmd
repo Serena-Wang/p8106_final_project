@@ -40,6 +40,9 @@ load("final_data.RData")
 final_data <- final_data %>% 
   mutate(binary_recovery_time = as.factor(binary_recovery_time))
 
+# Here, we set the positive class to be low. 
+# 0 = low = positive class
+# 1 = high = negative class
 levels(final_data$binary_recovery_time) = c("low", "high")
 
 set.seed(2)
@@ -106,6 +109,7 @@ summary(boost_fit$finalModel,las = 2, cBars = 17, cex.names = 0.6)
 ```{r training error}
 trboost_prediction <- predict(boost_fit$finalModel, newdata = train_x, type = "response")
 
+# As predictions are made for the positive class, we set a threshold 0.5 and assign anything above to be "low" (0).
 trboost_prediction[trboost_prediction > 0.50] = "low"
 trboost_prediction[trboost_prediction < 0.50] = "high"
 
@@ -117,6 +121,7 @@ boost_tr_mse
 ```{r testing error}
 boost_prediction <- predict(boost_fit$finalModel, newdata = test_x, type = "response")
 
+# As predictions are made for the positive class, we set a threshold 0.5 and assign anything above to be "low" (0).
 boost_prediction[boost_prediction > 0.50] = "low"
 boost_prediction[boost_prediction < 0.50] = "high"
 
