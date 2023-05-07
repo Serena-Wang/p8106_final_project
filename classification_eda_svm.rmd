@@ -1,0 +1,128 @@
+---
+title: "Classification_EDA_SVM"
+author: "Yijin Wang"
+date: "2023-05-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r,message = FALSE}
+library(janitor)
+library(tidyverse)
+library(AppliedPredictiveModeling)
+library(lattice)
+library(caret)
+library(corrplot)
+library(GGally)
+library(miscset)
+library(ggpubr)
+library(knitr)
+library(rpart)
+library(rpart.plot)
+library(ranger)
+library(kernlab)
+```
+
+
+## 1. Load Data
+```{r}
+load("final_data.RData")
+```
+
+## 2. Train/test split
+```{r}
+set.seed(2)
+final_data <- final_data %>%
+  mutate(binary_recovery_time = factor(binary_recovery_time))
+levels(final_data$binary_recovery_time) = c("low", "high")
+training_rows <- createDataPartition(final_data$binary_recovery_time,
+                                     p = 0.8,
+                                     list = F)
+```
+
+```{r}
+train_x <- model.matrix(binary_recovery_time~., final_data %>% select(-id, -recovery_time))[training_rows,-1]
+train_y <- final_data$binary_recovery_time[training_rows]
+test_x <- model.matrix(binary_recovery_time~., final_data %>% select(-id, -recovery_time))[-training_rows,-1]
+test_y <- final_data$binary_recovery_time[-training_rows]
+```
+
+
+```{r}
+training_set <- final_data[training_rows,]
+```
+
+
+## 3.EDA
+
+### basic summary statistics
+```{r}
+summary(training_set)
+```
+
+quantative variables
+
+```{r}
+theme <- transparentTheme(trans = 0.4)
+theme$plot.symbol$col = rgb(.2, .2, .2, .4)
+theme$plot.symbol$pch = 16
+theme$plot.line$col = rgb(1, 0, 0, .7)
+theme$plot.line$lwd <- 2
+trellis.par.set(theme)
+featurePlot(x = training_set %>% dplyr::select(-recovery_time, -binary_recovery_time, -id, -gender, -race,-smoking,-hypertension, -diabetes, -vaccine, -severity, -study),
+            y = training_set$binary_recovery_time,
+            plot = "box",
+            pch = "|",
+            scales = list(x = list(relation = "free"),
+                          y = list(relation = "free")),
+            auto.key = list(columns = 2),
+            labels = c("Binary Recovery Time", ""))
+```
+## SVM
+```{r}
+ctrl <- trainControl(method = "cv", number = 10)
+# tunes over both cost and sigma
+svmr_grid <- expand.grid(C = exp(seq(-2,2,len=40)),
+                         sigma = exp(seq(-1,2,len=30)))
+set.seed(2)
+
+library(doParallel)
+Mycluster = makeCluster(detectCores()-2)
+registerDoParallel(Mycluster)
+svmr_fit <- train(binary_recovery_time ~.,
+                  data = training_set %>% select(-id, -recovery_time),
+                  method = "svmRadialSigma",
+                  tuneGrid = svmr_grid,
+                  trControl = ctrl)
+stopCluster(Mycluster)
+registerDoSEQ()
+
+myCol<- rainbow(25)
+myPar <- list(superpose.symbol = list(col = myCol), 
+              superpose.line = list(col = myCol))
+plot(svmr_fit, highlight = TRUE, par.settings = myPar)
+
+
+```
+
+```{r}
+svmr_fit$bestTune
+```
+
+```{r}
+svm_train_prediction <- predict(svmr_fit$finalModel, newdata = train_x)
+mean(svm_train_prediction!=train_y)
+```
+
+```{r}
+svm_test_prediction <- predict(svmr_fit$finalModel, newdata = test_x)
+```
+
+```{r}
+mean(svm_test_prediction!=test_y)
+```
+
