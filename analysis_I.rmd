@@ -184,6 +184,9 @@ gam_fit$bestTune
 
 ```{r}
 gam_fit$finalModel
+
+par(mfrow = c(3,3))
+plot(gam_fit$finalModel)
 ```
 age and sbp are not in the model
 
@@ -250,6 +253,22 @@ coef(mars_fit$finalModel) %>%
   rename(value = V1) %>%
   kable(caption = "MARS Parameter Coefficients")
 ```
+
+```{r}
+library(vip)
+vip(mars_fit$finalModel)
+```
+```{r}
+p1 = pdp::partial(mars_fit, pred.var = c("studyB"), grid.resolution = 10) %>% autoplot()
+p2 = pdp::partial(mars_fit, pred.var = c("bmi"), grid.resolution = 10) %>% autoplot()
+p3 = pdp::partial(mars_fit, pred.var = c("smoking1"), grid.resolution = 10) %>% autoplot()
+p4 = pdp::partial(mars_fit, pred.var = c("ldl"), grid.resolution = 10) %>% autoplot()
+p5 = pdp::partial(mars_fit, pred.var = c("vaccine1"), grid.resolution = 10) %>% autoplot()
+p6 = pdp::partial(mars_fit, pred.var = c("severity1"), grid.resolution = 10) %>% autoplot()
+
+grid.arrange(p1, p2, p3, p4, p5, p6, nrow = 2, ncol = 3)
+```
+
 
 Test set performance
 ```{r}
