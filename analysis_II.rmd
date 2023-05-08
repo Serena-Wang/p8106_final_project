@@ -225,6 +225,70 @@ variable importance
 summary(boost_fit$finalModel,las = 2, cBars = 17, cex.names = 0.6)
 ```
 
+partial dependence plots
+```{r}
+pdp.1 <- boost_fit %>%
+  partial(pred.var = "bmi",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("bmi")
+
+pdp.2 <- boost_fit %>%
+  partial(pred.var = "studyB",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("studyB")
+
+pdp.3 <- boost_fit %>%
+  partial(pred.var = "weight",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("weight")
+
+pdp.4 <- boost_fit %>%
+  partial(pred.var = "height",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("height")
+
+pdp.5 <- boost_fit %>%
+  partial(pred.var = "vaccine1",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("vaccine1")
+
+pdp.6 <- boost_fit %>%
+  partial(pred.var = "ldl",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("ldl")
+
+pdp.7 <- boost_fit %>%
+  partial(pred.var = "sbp",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("sbp")
+
+pdp.8 <- boost_fit %>%
+  partial(pred.var = "age",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = train_x) +
+  ggtitle("age")
+
+library(gridExtra)
+grid.arrange(pdp.1, pdp.2, pdp.3, pdp.4, pdp.5, pdp.6, pdp.7, pdp.8, 
+             nrow = 2, ncol = 4)
+```
+
+
 ```{r training error}
 trboost_prediction <- predict(boost_fit$finalModel, newdata = train_x, type = "response")
 
@@ -246,6 +310,23 @@ boost_prediction[boost_prediction < 0.50] = "high"
 
 boost_ts_mse <- mean(boost_prediction != test_y)
 boost_ts_mse
+```
+
+roc
+```{r}
+library(pROC)
+
+boost_prediction_pl <- predict(boost_fit$finalModel, newdata = test_x, type = "response")
+
+roc.gbm <- roc(test_y, boost_prediction_pl)
+
+plot(roc.gbm, col = 1)
+
+auc <- roc.gbm$auc[1]
+
+modelNames <- c("Adaboost")
+
+legend("bottomright", legend = paste0(modelNames, ": ", round(auc,3)))
 ```
 
 ### c. SVM
