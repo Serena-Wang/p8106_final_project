@@ -209,7 +209,16 @@ modelNames <- c("Adaboost")
 legend("bottomright", legend = paste0(modelNames, ": ", round(auc,3)))
 ```
 
+```{r}
+test.pred.prob = predict(boost_fit$finalModel, newdata = as.data.frame(test_x), type = "response")
+test.pred = rep("high", length(test.pred.prob))
+test.pred[test.pred.prob > 0.5] = "low"
 
+confusionMatrix = confusionMatrix(data = as.factor(test.pred), 
+                reference = test_y,
+                positive = "low")
+confusionMatrix
+```
 
 
 
