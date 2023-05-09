@@ -149,7 +149,7 @@ enet_fit$bestTune
 myCol <- rainbow(25)
 myPar <- list(superpose.symbol = list(col = myCol),
               superpose.line = list(col = myCol))
-plot(enet_fit, par.settings = myPar)
+plot(enet_fit, par.settings = myPar, main = "Elastic Net")
 ```
 
 \newpage
@@ -211,7 +211,9 @@ s$chi.sq%>%
 
 
 ```{r}
+par(mfrow = c(3,2))
 plot(gam_fit$finalModel)
+title("GAM", line = -1, outer = TRUE)
 ```
 
 Test set performance
@@ -240,7 +242,7 @@ mars_fit <- train(train_x,
 ```
 
 ```{r}
-plot(mars_fit)
+plot(mars_fit, main = "MARS")
 ```
 
 ```{r}
@@ -306,7 +308,7 @@ registerDoSEQ()
 
 
 ```{r}
-ggplot(boost_fit, highlight = TRUE)
+ggplot(boost_fit, highlight = TRUE) +ggtitle("Random Forest")+theme(legend.position="top")
 ```
 
 ```{r}
