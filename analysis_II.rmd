@@ -212,7 +212,7 @@ registerDoSEQ()
 ```
 
 ```{r}
-ggplot(boost_fit, highlight = TRUE)
+ggplot(boost_fit, highlight = TRUE) +ggtitle("Random Forest")+theme(legend.position="top")
 ```
 
 ```{r}
@@ -267,7 +267,7 @@ registerDoSEQ()
 myCol<- rainbow(25)
 myPar <- list(superpose.symbol = list(col = myCol), 
               superpose.line = list(col = myCol))
-plot(svmr_fit, highlight = TRUE, par.settings = myPar)
+plot(svmr_fit, highlight = TRUE, par.settings = myPar,main = "SVM")
 
 ```
 
