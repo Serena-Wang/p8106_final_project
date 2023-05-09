@@ -1,6 +1,5 @@
 ---
 title: "analysis_I"
-author: "Yijin Wang"
 date: "2023-05-06"
 output: pdf_document
 ---
